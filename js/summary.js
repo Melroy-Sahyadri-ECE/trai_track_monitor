@@ -25,13 +25,6 @@ const SummaryStats = (() => {
             format: (v) => v.toLocaleString()
         },
         {
-            key: 'goodCount',
-            label: 'Good (Green)',
-            icon: '✅',
-            colorClass: 'green',
-            format: (v) => v.toLocaleString()
-        },
-        {
             key: 'suspectCount',
             label: 'Suspect (Yellow)',
             icon: '⚠️',
@@ -131,11 +124,9 @@ const SummaryStats = (() => {
         const total = data.totalReadings || 1;
         const critPct = ((data.criticalCount / total) * 100).toFixed(1);
         const suspPct = ((data.suspectCount / total) * 100).toFixed(1);
-        const goodPct = ((data.goodCount / total) * 100).toFixed(1);
 
         setChange('criticalCount', `${critPct}% of total`, critPct > 10 ? 'negative' : 'neutral');
         setChange('suspectCount', `${suspPct}% of total`, suspPct > 20 ? 'negative' : 'neutral');
-        setChange('goodCount', `${goodPct}% of total`, 'positive');
         setChange('totalReadings', 'All measurements', 'neutral');
         setChange('avgScore', data.avgScore < 35 ? 'Within normal range' : 'Above warning level', data.avgScore < 35 ? 'positive' : 'negative');
         setChange('maxDeviation', data.maxDeviation <= 5 ? 'Within tolerance' : 'Exceeds tolerance', data.maxDeviation <= 5 ? 'positive' : 'negative');
@@ -148,7 +139,7 @@ const SummaryStats = (() => {
         const ctx = canvas.getContext('2d');
 
         if (chart) {
-            chart.data.datasets[0].data = [data.goodCount, data.suspectCount, data.criticalCount];
+            chart.data.datasets[0].data = [data.suspectCount, data.criticalCount];
             chart.update();
             return;
         }
@@ -156,11 +147,10 @@ const SummaryStats = (() => {
         chart = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['Good', 'Suspicious', 'Critical'],
+                labels: ['Suspicious', 'Critical'],
                 datasets: [{
-                    data: [data.goodCount, data.suspectCount, data.criticalCount],
+                    data: [data.suspectCount, data.criticalCount],
                     backgroundColor: [
-                        '#22c55e',
                         '#eab308',
                         '#ef4444'
                     ],
