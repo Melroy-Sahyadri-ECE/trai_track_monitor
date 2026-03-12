@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Real-Time Monitor</title>
+    <meta name="description" content="Configurable real-time monitoring dashboard with Track Map, Health Profile, Gauge Profile, Live FFT, Events Table, and Summary Stats panels.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                </svg>
+                <span class="logo-text">Dashboard</span>
+            </div>
+            <!-- ESP32 Status Indicator -->
+            <div class="esp32-status" id="esp32-status">
+                <div class="esp32-status-indicator">
+                    <span class="esp32-status-dot"></span>
+                    <span class="esp32-status-text">ESP32 Disconnected</span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <ul>
+                <li>
+                    <a href="#" class="nav-link active" data-panel="trackmap" id="nav-trackmap">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        <span>Track Map</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-panel="health" id="nav-health">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <span>Health Profile</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-panel="gauge" id="nav-gauge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>Gauge Profile</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-panel="fft" id="nav-fft">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="12" width="3" height="8" rx="0.5"></rect>
+                            <rect x="7.5" y="8" width="3" height="12" rx="0.5"></rect>
+                            <rect x="12" y="4" width="3" height="16" rx="0.5"></rect>
+                            <rect x="16.5" y="9" width="3" height="11" rx="0.5"></rect>
+                        </svg>
+                        <span>Live FFT</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-panel="events" id="nav-events">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                        <span>Events Table</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-panel="summary" id="nav-summary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+                            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+                        </svg>
+                        <span>Summary Stats</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a href="#" class="nav-link" data-panel="settings" id="nav-settings">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                <span>Settings</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Mobile menu toggle -->
+    <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </button>
+
+    <!-- Main Content Area -->
+    <main class="main-content" id="main-content">
+
+        <!-- Track Map Panel -->
+        <section class="panel active" id="panel-trackmap">
+            <div class="panel-header">
+                <h1>Track Map</h1>
+                <p class="panel-subtitle">GPS pins color-coded Green / Yellow / Red per verdict</p>
+                <div class="panel-status" id="status-trackmap">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Demo Data</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="map-container" id="map-container"></div>
+            </div>
+        </section>
+
+        <!-- Health Profile Panel -->
+        <section class="panel" id="panel-health">
+            <div class="panel-header">
+                <h1>Health Profile</h1>
+                <p class="panel-subtitle">Vibration score vs chainage (km)</p>
+                <div class="panel-status" id="status-health">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Demo Data</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="chart-container">
+                    <canvas id="health-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Gauge Profile Panel -->
+        <section class="panel" id="panel-gauge">
+            <div class="panel-header">
+                <h1>Gauge Profile</h1>
+                <p class="panel-subtitle">Gauge deviation from 1676mm nominal vs chainage</p>
+                <div class="panel-status" id="status-gauge">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Demo Data</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="chart-container">
+                    <canvas id="gauge-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Live FFT Panel -->
+        <section class="panel" id="panel-fft">
+            <div class="panel-header">
+                <h1>Live FFT</h1>
+                <p class="panel-subtitle">Real-time frequency spectrum with peak detection</p>
+                <div class="panel-status" id="status-fft">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Demo Data</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <!-- Mode Toggle Button -->
+                <div style="display: flex; justify-content: center; margin-bottom: 12px;">
+                    <button id="fft-mode-toggle" style="
+                        background: rgba(99, 102, 241, 0.1);
+                        border: 1px solid rgba(99, 102, 241, 0.2);
+                        border-radius: 8px;
+                        color: #f1f5f9;
+                        padding: 10px 20px;
+                        font-family: Inter, sans-serif;
+                        font-size: 13px;
+                        font-weight: 500;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    ">
+                        🎤 Use Microphone
+                    </button>
+                </div>
+                
+                <!-- FFT Stats -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; padding: 0 4px;">
+                    <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Peak Frequency</div>
+                        <div style="font-size: 20px; color: #f1f5f9; font-weight: 600;" id="fft-peak-freq">-- Hz</div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Amplitude: <span id="fft-peak-amp" style="font-weight: 500;">--</span></div>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Low Band (0-50 Hz)</div>
+                        <div style="font-size: 20px; color: #10b981; font-weight: 600;" id="fft-band-low">--</div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Average energy</div>
+                    </div>
+                    <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Mid Band (50-150 Hz)</div>
+                        <div style="font-size: 20px; color: #6366f1; font-weight: 600;" id="fft-band-mid">--</div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Average energy</div>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">High Band (150-500 Hz)</div>
+                        <div style="font-size: 20px; color: #ef4444; font-weight: 600;" id="fft-band-high">--</div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Average energy</div>
+                    </div>
+                </div>
+                
+                <!-- FFT Chart -->
+                <div class="chart-container">
+                    <canvas id="fft-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Events Table Panel -->
+        <section class="panel" id="panel-events">
+            <div class="panel-header">
+                <h1>Events Table</h1>
+                <p class="panel-subtitle">Timestamp, chainage, verdict, scores, gauge</p>
+                <div class="panel-status" id="status-events">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Demo Data</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="table-container">
+                    <table class="events-table" id="events-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Chainage (km)</th>
+                                <th>Verdict</th>
+                                <th>Vibration Score</th>
+                                <th>Gauge (mm)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary Stats Panel -->
+        <section class="panel" id="panel-summary">
+            <div class="panel-header">
+                <h1>Summary Stats</h1>
+                <p class="panel-subtitle">Total readings, critical count, suspect count</p>
+                <div class="panel-status" id="status-summary">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Demo Data</span>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="stats-grid" id="stats-grid">
+                    <!-- Cards injected by summary.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Panel -->
+        <section class="panel" id="panel-settings">
+            <div class="panel-header">
+                <h1>Settings</h1>
+                <p class="panel-subtitle">Map each panel to a data source endpoint</p>
+            </div>
+            <div class="panel-body">
+                <div class="settings-container" id="settings-container">
+                    <!-- Settings form injected by settings.js -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- App Script -->
+    <script type="module" src="/src/app.ts"></script>
+</body>
+</html>

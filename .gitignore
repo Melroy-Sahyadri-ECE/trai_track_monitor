@@ -18,3 +18,15 @@ Railway Crack Detection.v2i.yolo26.zip
 # We DO want to commit the trained models
 !runs/railway_crack_yolo/weights/best.pt
 !models/crack_classifier.pth
+
+# Dashboard ignores
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+.env
+.vscode/
+*.swp
+*.swo
+*~
