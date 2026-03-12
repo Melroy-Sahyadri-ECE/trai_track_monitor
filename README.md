@@ -23,8 +23,8 @@ For NVIDIA GPU acceleration, ensure you have the appropriate CUDA drivers instal
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Melroy-Sahyadri-ECE/gandutrack.git
-   cd gandutrack
+   git clone https://github.com/Melroy-Sahyadri-ECE/train_track_monitor.git
+   cd train_track_monitor
    ```
 
 2. **Create a virtual environment:**
