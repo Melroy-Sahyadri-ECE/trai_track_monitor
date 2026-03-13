@@ -113,13 +113,19 @@ def create_info_panel(frame: np.ndarray, fps: float, detections: list,
     det_count = len(detections)
     det_color = (0, 255, 0) if det_count == 0 else (0, 0, 255)
     severity_text = ""
+    
     if detections:
         severities = [d['severity'] for d in detections]
+        labels = [d['label'] for d in detections]
+        
         if "high" in severities:
-            severity_text = " | ALERT: HIGH SEVERITY!"
+            severity_text = " | ALERT: HIGH SEVERITY CRACK!"
             det_color = (0, 0, 255)
+        elif "animal" in severities:
+            severity_text = f" | ANIMAL SPOTTED!"
+            det_color = (255, 100, 0) # Blue-ish status
         elif "medium" in severities:
-            severity_text = " | WARNING: Medium severity"
+            severity_text = " | WARNING: Medium severity crack"
             det_color = (0, 200, 255)
 
     stats = (f"FPS: {fps:.1f}  |  Detections: {det_count}  |  "

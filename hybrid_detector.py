@@ -67,7 +67,7 @@ class HybridDetector:
         root = Path(__file__).resolve().parent
 
         if yolo_model_path is None:
-            yolo_model_path = str(root / "runs" / "railway_crack_yolo" / "weights" / "best.pt")
+            yolo_model_path = str(root / "runs" / "detect" / "runs" / "unified_yolo2" / "weights" / "best.pt")
         if classifier_model_path is None:
             classifier_model_path = str(root / "models" / "crack_classifier.pth")
 
@@ -79,8 +79,9 @@ class HybridDetector:
         # ── Load CNN Classifier ────────────────────────────────────────
         print(f"[HybridDetector] Loading CNN classifier: {classifier_model_path}")
         self.classifier = models.mobilenet_v2(weights=None)
+        # Class 0: Crack, Class 1: Animal, Class 2: Background
         self.classifier.classifier[1] = nn.Linear(
-            self.classifier.last_channel, 2
+            self.classifier.last_channel, 3
         )
 
         checkpoint = torch.load(classifier_model_path, map_location=self.device, weights_only=True)
@@ -101,11 +102,18 @@ class HybridDetector:
         self.classifier_conf = classifier_conf
         self.fusion_weight = fusion_weight
 
+        # ── Label Mapping ─────────────────────────────────────────────
+        self.class_names = {
+            0: "Railway Crack",
+            1: "Animal"
+        }
+
         # ── Severity colors (BGR) ─────────────────────────────────────
         self.colors = {
             "low": (0, 255, 0),       # Green
             "medium": (0, 200, 255),   # Yellow
             "high": (0, 0, 255),       # Red
+            "animal": (255, 100, 0)    # Blue-ish for animals
         }
 
         print("[HybridDetector] Ready!")
@@ -136,9 +144,10 @@ class HybridDetector:
         h, w = frame.shape[:2]
 
         for i in range(len(boxes)):
-            # Get bounding box
+            # Get bounding box info
             x1, y1, x2, y2 = boxes.xyxy[i].cpu().numpy().astype(int)
             yolo_conf = float(boxes.conf[i].cpu().numpy())
+            yolo_cls = int(boxes.cls[i].cpu().numpy())
 
             # Clamp to frame
             x1, y1 = max(0, x1), max(0, y1)
@@ -154,23 +163,35 @@ class HybridDetector:
 
             with self.torch.no_grad():
                 outputs = self.classifier(input_tensor)
-                probs = self.torch.softmax(outputs, dim=1)
-                cnn_conf = float(probs[0, 1].cpu().numpy())  # P(crack)
+                probs = self.torch.softmax(outputs, dim=1).cpu().numpy()[0]
+                
+                # Logic: Match YOLO class to CNN class
+                # YOLO 0 (crack) -> CNN 0 (crack)
+                # YOLO 1 (animal) -> CNN 1 (animal)
+                cnn_conf = probs[yolo_cls]
+                pred_cls = np.argmax(probs)
 
             # Confidence fusion
             fused_conf = (self.fusion_weight * yolo_conf +
                           (1 - self.fusion_weight) * cnn_conf)
 
-            # Only keep if CNN also agrees
-            if cnn_conf >= self.classifier_conf:
-                severity = self._get_severity(fused_conf)
+            # Verification: CNN must agree with YOLO class AND exceed threshold
+            if pred_cls == yolo_cls and cnn_conf >= self.classifier_conf:
+                label_name = self.class_names.get(yolo_cls, f"Class {yolo_cls}")
+                
+                # Determine severity color
+                if yolo_cls == 1:
+                    severity = "animal" # Special blue color for animals
+                else:
+                    severity = self._get_severity(fused_conf)
+
                 detections.append({
                     'bbox': (x1, y1, x2, y2),
                     'yolo_conf': yolo_conf,
                     'cnn_conf': cnn_conf,
                     'fused_conf': fused_conf,
                     'severity': severity,
-                    'label': 'Railway Crack',
+                    'label': label_name,
                 })
 
         return detections

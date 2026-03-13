@@ -19,26 +19,29 @@ import numpy as np
 
 def prepare_classifier_dataset(root: Path):
     """
-    Extracts crack regions from YOLO labels + images.
-    Also creates negative samples from unannotated regions.
+    Extracts crack and animal regions from YOLO labels + images.
+    Also creates background samples from unannotated regions.
     """
     output_dir = root / "classifier_dataset"
-    pos_dir = output_dir / "crack"
-    neg_dir = output_dir / "no_crack"
+    crack_dir = output_dir / "crack"
+    animal_dir = output_dir / "animal"
+    bg_dir = output_dir / "background"
 
     # Clean and recreate
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    pos_dir.mkdir(parents=True)
-    neg_dir.mkdir(parents=True)
+    crack_dir.mkdir(parents=True)
+    animal_dir.mkdir(parents=True)
+    bg_dir.mkdir(parents=True)
 
     splits = ["train", "valid"]
-    pos_count = 0
-    neg_count = 0
+    crack_count = 0
+    animal_count = 0
+    bg_count = 0
 
     for split in splits:
-        img_dir = root / "dataset" / split / "images"
-        lbl_dir = root / "dataset" / split / "labels"
+        img_dir = root / "unified_dataset" / split / "images"
+        lbl_dir = root / "unified_dataset" / split / "labels"
 
         if not img_dir.exists():
             continue
@@ -55,6 +58,7 @@ def prepare_classifier_dataset(root: Path):
             lbl_path = lbl_dir / lbl_name
 
             crack_boxes = []
+            animal_boxes = []
 
             # ── Positive samples: crop annotated regions ──────────────
             if lbl_path.exists():
@@ -62,7 +66,8 @@ def prepare_classifier_dataset(root: Path):
                     for line in f:
                         parts = line.strip().split()
                         if len(parts) >= 5:
-                            _, cx, cy, bw, bh = map(float, parts[:5])
+                            cls_id = int(parts[0])
+                            cx, cy, bw, bh = map(float, parts[1:5])
                             x1 = int((cx - bw / 2) * w)
                             y1 = int((cy - bh / 2) * h)
                             x2 = int((cx + bw / 2) * w)
@@ -76,26 +81,35 @@ def prepare_classifier_dataset(root: Path):
                             x2 = min(w, x2 + pad_x)
                             y2 = min(h, y2 + pad_y)
 
-                            crack_boxes.append((x1, y1, x2, y2))
-
                             crop = img[y1:y2, x1:x2]
                             if crop.size > 0 and crop.shape[0] > 10 and crop.shape[1] > 10:
                                 crop_resized = cv2.resize(crop, (128, 128))
-                                cv2.imwrite(str(pos_dir / f"{split}_{pos_count:05d}.jpg"), crop_resized)
-                                pos_count += 1
+                                
+                                # Class 0: Crack
+                                if cls_id == 0:
+                                    crack_boxes.append((x1, y1, x2, y2))
+                                    cv2.imwrite(str(crack_dir / f"{split}_{crack_count:05d}.jpg"), crop_resized)
+                                    crack_count += 1
+                                # Class 1: Animal (or anything else we mapped)
+                                elif cls_id == 1:
+                                    animal_boxes.append((x1, y1, x2, y2))
+                                    cv2.imwrite(str(animal_dir / f"{split}_{animal_count:05d}.jpg"), crop_resized)
+                                    animal_count += 1
 
-            # ── Negative samples: random crops from non-annotated regions ──
-            num_neg = max(1, len(crack_boxes)) if crack_boxes else 2
-            for _ in range(num_neg):
+            # ── Background samples: random crops from non-annotated regions ──
+            all_boxes = crack_boxes + animal_boxes
+            num_bg = max(1, len(all_boxes)) if all_boxes else 2
+            
+            for _ in range(num_bg):
                 for attempt in range(20):
                     crop_w = random.randint(50, min(300, w // 2))
                     crop_h = random.randint(50, min(300, h // 2))
                     rx = random.randint(0, w - crop_w)
                     ry = random.randint(0, h - crop_h)
 
-                    # Check no overlap with crack boxes
+                    # Check no overlap with any annotated boxes
                     overlaps = False
-                    for bx1, by1, bx2, by2 in crack_boxes:
+                    for bx1, by1, bx2, by2 in all_boxes:
                         if rx < bx2 and rx + crop_w > bx1 and ry < by2 and ry + crop_h > by1:
                             overlaps = True
                             break
@@ -104,13 +118,14 @@ def prepare_classifier_dataset(root: Path):
                         crop = img[ry:ry + crop_h, rx:rx + crop_w]
                         if crop.size > 0:
                             crop_resized = cv2.resize(crop, (128, 128))
-                            cv2.imwrite(str(neg_dir / f"{split}_{neg_count:05d}.jpg"), crop_resized)
-                            neg_count += 1
+                            cv2.imwrite(str(bg_dir / f"{split}_{bg_count:05d}.jpg"), crop_resized)
+                            bg_count += 1
                         break
 
     print(f"[INFO] Classifier dataset prepared:")
-    print(f"  Positive (crack):    {pos_count} images")
-    print(f"  Negative (no_crack): {neg_count} images")
+    print(f"  Class 0 (crack):      {crack_count} images")
+    print(f"  Class 1 (animal):     {animal_count} images")
+    print(f"  Class 2 (background): {bg_count} images")
     print(f"  Location: {output_dir}")
 
     return output_dir
@@ -138,17 +153,21 @@ def train_classifier(root: Path):
             self.transform = transform
 
             crack_dir = data_dir / "crack"
-            no_crack_dir = data_dir / "no_crack"
+            animal_dir = data_dir / "animal"
+            bg_dir = data_dir / "background"
 
             for img_path in crack_dir.glob("*.jpg"):
-                self.samples.append((str(img_path), 1))
-            for img_path in no_crack_dir.glob("*.jpg"):
                 self.samples.append((str(img_path), 0))
+            for img_path in animal_dir.glob("*.jpg"):
+                self.samples.append((str(img_path), 1))
+            for img_path in bg_dir.glob("*.jpg"):
+                self.samples.append((str(img_path), 2))
 
             random.shuffle(self.samples)
             print(f"  Loaded {len(self.samples)} samples "
-                  f"({sum(1 for _, l in self.samples if l == 1)} crack, "
-                  f"{sum(1 for _, l in self.samples if l == 0)} no_crack)")
+                  f"({sum(1 for _, l in self.samples if l == 0)} crack, "
+                  f"{sum(1 for _, l in self.samples if l == 1)} animal, "
+                  f"{sum(1 for _, l in self.samples if l == 2)} background)")
 
         def __len__(self):
             return len(self.samples)
@@ -200,7 +219,7 @@ def train_classifier(root: Path):
 
     # ── Model: MobileNetV2 (pretrained) ───────────────────────────────
     model = models.mobilenet_v2(weights='IMAGENET1K_V1')
-    model.classifier[1] = nn.Linear(model.last_channel, 2)  # Binary: crack / no_crack
+    model.classifier[1] = nn.Linear(model.last_channel, 3)  # 3-Class: crack(0), animal(1), bg(2)
     model = model.to(device)
 
     criterion = nn.CrossEntropyLoss()

@@ -39,36 +39,38 @@ names: ['railway-gap']
     print(f"[INFO] Dataset directory: {dataset_dir}")
 
     # ── Model Setup ────────────────────────────────────────────────────
-    # YOLOv8-nano: smallest, fastest — ideal for edge/real-time use
-    model = YOLO("yolov8n.pt")
+    project_root = Path(__file__).resolve().parent
+    data_yaml_path = project_root / 'unified_dataset' / 'data.yaml'
+    
+    if not data_yaml_path.exists():
+        print(f"Error: {data_yaml_path} not found.")
+        print("Please ensure the unified dataset is constructed first.")
+        sys.exit(1)
 
-    # ── Training Configuration ─────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("  RAILWAY CRACK DETECTION — YOLOv8 TRAINING")
-    print("=" * 60)
-    print(f"  Model:      YOLOv8-nano")
-    print(f"  Dataset:    {DATA_YAML}")
-    print(f"  Image size: 640")
-    print(f"  Batch:      8")
-    print(f"  Epochs:     100 (early stopping @ 20)")
-    print("=" * 60 + "\n")
+    print("="*50)
+    print("  Starting YOLOv8 Unified Training (Cracks + Animals)")
+    print("="*50)
 
+    # 1. Load the YOLOv8 nano model (lightweight, good for real-time)
+    # Using 'yolo26n.pt' or 'yolov8n.pt' - we'll start with the base YOLOv8n weights
+    # to leverage transfer learning
+    model = YOLO('yolov8n.pt') 
+
+    # 2. Train the model
+    # Adjust batch size and epochs based on your specific GPU (RTX 4050 6GB)
     results = model.train(
-        data=str(DATA_YAML),
-        epochs=100,
-        imgsz=640,           # Good balance of speed and accuracy
-        batch=8,             # Fits in 6GB VRAM
-        patience=20,         # Early stopping
-        save=True,
-        save_period=10,      # Checkpoint every 10 epochs
-        device=0,            # Use GPU 0
-        workers=4,
-        project=str(ROOT / "runs"),
-        name="railway_crack_yolo",
-        exist_ok=True,
-        pretrained=True,
-        optimizer="AdamW",
-        lr0=0.001,
+        data=str(data_yaml_path),
+        epochs=100,            # Max epochs
+        patience=20,           # Early stopping if no improvement
+        batch=8,               # Dropped to 8 to fit safely in 6GB VRAM at 880 imgsz
+        imgsz=880,             # Original dataset size
+        device=0,              # Use GPU 0
+        project='runs',        # Save directory
+        name='unified_yolo',   # Run name
+        cache=False,           # Disabled cache to prevent PyTorch system RAM MemoryError
+        workers=0,             # Must be 0 on Windows to prevent Multiprocessing EOFError
+        optimizer='auto',      # Auto-select optimizer (usually AdamW or SGD)
+        # Augmentation (crucial for robustness)
         lrf=0.01,
         warmup_epochs=5,
         mosaic=1.0,          # Mosaic augmentation
