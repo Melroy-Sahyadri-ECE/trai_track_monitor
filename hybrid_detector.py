@@ -29,9 +29,9 @@ class HybridDetector:
         self,
         yolo_model_path: str = None,
         classifier_model_path: str = None,
-        yolo_conf: float = 0.25,
-        classifier_conf: float = 0.5,
-        fusion_weight: float = 0.6,
+        yolo_conf: float = 0.15,          # Lowered for higher sensitivity
+        classifier_conf: float = 0.40,    # Lowered CNN strictness
+        fusion_weight: float = 0.7,       # Give YOLO more authority
         device: str = "auto",
     ):
         """

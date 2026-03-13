@@ -18,12 +18,73 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
+import sys
+import time
+import argparse
+import threading
+from pathlib import Path
+from datetime import datetime
+
 import cv2
 import numpy as np
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hybrid_detector import HybridDetector
+
+
+class ThreadedCamera:
+    """Read frames in a background thread to clear the buffer instantly and get 30+ FPS."""
+    def __init__(self, source_url):
+        self.source = source_url
+        if isinstance(source_url, str) and source_url.isdigit():
+            self.source = int(source_url)
+            
+        if isinstance(self.source, str) and (self.source.startswith('http') or self.source.startswith('rtsp')):
+            self.cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        else:
+            self.cap = cv2.VideoCapture(self.source)
+            
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        
+        self.actual_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.actual_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        self.ret = False
+        self.frame = None
+        self.running = True
+        
+        # Read first frame
+        if self.cap.isOpened():
+            self.ret, self.frame = self.cap.read()
+            self.thread = threading.Thread(target=self.update, args=())
+            self.thread.daemon = True
+            self.thread.start()
+
+    def update(self):
+        # Background thread continuously pulls latest frame
+        while self.running:
+            if self.cap.isOpened():
+                if isinstance(self.source, str) and (self.source.startswith('http') or self.source.startswith('rtsp')):
+                    self.cap.grab()
+                ret, frame = self.cap.read()
+                if ret:
+                    self.ret, self.frame = ret, frame
+            time.sleep(0.005) # Prevent CPU pegging
+            
+    def read(self):
+        return self.ret, self.frame
+
+    def release(self):
+        self.running = False
+        if hasattr(self, 'thread'):
+            self.thread.join(timeout=1.0)
+        self.cap.release()
+
+    def isOpened(self):
+        return self.cap.isOpened()
 
 
 def create_info_panel(frame: np.ndarray, fps: float, detections: list,
@@ -75,7 +136,7 @@ def create_info_panel(frame: np.ndarray, fps: float, detections: list,
     return result
 
 
-def run_detection(source=0, yolo_model=None, classifier_model=None, 
+def run_detection(source="0", yolo_model=None, classifier_model=None, 
                   yolo_conf=0.25, save_dir="screenshots"):
     """Main detection loop."""
 
@@ -91,25 +152,17 @@ def run_detection(source=0, yolo_model=None, classifier_model=None,
     )
 
     # ── Open camera/video ──────────────────────────────────────────────
-    if isinstance(source, str) and source.isdigit():
-        source = int(source)
-
     print(f"\n[INFO] Opening source: {source}")
-    cap = cv2.VideoCapture(source)
+    cap = ThreadedCamera(source)
 
     if not cap.isOpened():
         print(f"ERROR: Could not open video source: {source}")
-        print("  - For webcam, try: python detect_live.py --source 0")
-        print("  - For video file:  python detect_live.py --source path/to/video.mp4")
+        print("  - For local webcam:  python detect_live.py --source 0")
+        print("  - For IP Webcam app: python detect_live.py --source http://192.168.x.x:8080/video")
+        print("  - For video file:    python detect_live.py --source path/to/video.mp4")
         sys.exit(1)
 
-    # Set camera resolution
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"[INFO] Camera resolution: {actual_w}x{actual_h}")
+    print(f"[INFO] Source resolution: {cap.actual_w}x{cap.actual_h}")
 
     # ── State ──────────────────────────────────────────────────────────
     save_path = Path(save_dir)
@@ -125,12 +178,13 @@ def run_detection(source=0, yolo_model=None, classifier_model=None,
     while True:
         if not paused:
             ret, frame = cap.read()
-            if not ret:
-                if isinstance(source, int):
+            if not ret or frame is None:
+                if isinstance(cap.source, int):
                     print("[WARN] Camera frame lost, retrying...")
+                    time.sleep(0.1)
                     continue
                 else:
-                    print("[INFO] Video ended.")
+                    print("[WARN] Stream disconnected or video ended.")
                     break
 
             # ── Run detection ──────────────────────────────────────────
@@ -157,7 +211,12 @@ def run_detection(source=0, yolo_model=None, classifier_model=None,
             display = create_info_panel(annotated, fps, detections,
                                         current_yolo_conf, paused)
 
-        cv2.imshow("Railway Crack Detection", display)
+        # Use a slightly smaller window for IP cameras if they are very high res (e.g., 4K phone cameras)
+        if cap.actual_h > 1080:
+            display_scaled = cv2.resize(display, (int(cap.actual_w * 720 / cap.actual_h), 720 + 80))  # 80 is panel_h
+            cv2.imshow("Railway Crack Detection", display_scaled)
+        else:
+            cv2.imshow("Railway Crack Detection", display)
 
         # ── Keyboard controls ──────────────────────────────────────────
         key = cv2.waitKey(1) & 0xFF
@@ -197,14 +256,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python detect_live.py                  # Use default webcam
-  python detect_live.py --source 1       # Use second camera
-  python detect_live.py --source vid.mp4 # Process video file
-  python detect_live.py --yolo-conf 0.4  # Higher threshold = fewer FP
+  python detect_live.py                                         # Use default webcam
+  python detect_live.py --source 1                              # Use second usb camera
+  python detect_live.py --source http://192.168.31.211:4747/video # Phone DroidCam App
+  python detect_live.py --source vid.mp4                        # Process video file
+  python detect_live.py --yolo-conf 0.4                         # Higher threshold = fewer FP
         """,
     )
     parser.add_argument("--source", default="0",
-                        help="Camera index or video file path (default: 0)")
+                        help="Camera index, IP Webcam URL, or video file path (default: 0)")
     parser.add_argument("--yolo-model", default=None,
                         help="Path to YOLOv8 best.pt")
     parser.add_argument("--classifier-model", default=None,
